@@ -15,7 +15,7 @@ from pathlib import Path
 # ─────────────────────────────────────────
 #  CONFIGURATION
 # ─────────────────────────────────────────
-VIDEO_NAME  = "Adam_Doueihi-Tigers_v_Eels_NRL_R6_2023"
+VIDEO_NAME = "ARG_CRO_220001 (1)"
 FRAMES_ROOT = "data/frames"
 OUTPUT_ROOT = "data/detections"
 VIS_OUTPUT  = "data/detections"  # where to save visualizations
@@ -24,29 +24,52 @@ VIS_OUTPUT  = "data/detections"  # where to save visualizations
 NUM_FRAMES_TO_VIZ = 10  # visualize first 10 frames
 
 # NRL field lines to draw (in metres, origin = left try-line / top sideline)
+# FIELD_LINES = {
+#     # Try lines
+#     "left_try_line":    [(0, 0), (0, 68)],
+#     "right_try_line":   [(100, 0), (100, 68)],
+    
+#     # Sidelines
+#     "top_sideline":     [(0, 0), (100, 0)],
+#     "bottom_sideline":  [(0, 68), (100, 68)],
+    
+#     # 10m lines
+#     "10m_left":         [(10, 0), (10, 68)],
+#     "10m_right":        [(90, 0), (90, 68)],
+    
+#     # 20m lines  
+#     "20m_left":         [(20, 0), (20, 68)],
+#     "20m_right":        [(80, 0), (80, 68)],
+    
+#     # Halfway line
+#     "halfway":          [(50, 0), (50, 68)],
+    
+#     # 40m lines
+#     "40m_left":         [(40, 0), (40, 68)],
+#     "40m_right":        [(60, 0), (60, 68)],
+# }
+
+# Soccer field: 105m x 68m (SoccerNet standard)
 FIELD_LINES = {
-    # Try lines
-    "left_try_line":    [(0, 0), (0, 68)],
-    "right_try_line":   [(100, 0), (100, 68)],
+    # Goal lines
+    "left_goal_line":    [(0, 0), (0, 68)],
+    "right_goal_line":   [(105, 0), (105, 68)],
     
     # Sidelines
-    "top_sideline":     [(0, 0), (100, 0)],
-    "bottom_sideline":  [(0, 68), (100, 68)],
-    
-    # 10m lines
-    "10m_left":         [(10, 0), (10, 68)],
-    "10m_right":        [(90, 0), (90, 68)],
-    
-    # 20m lines  
-    "20m_left":         [(20, 0), (20, 68)],
-    "20m_right":        [(80, 0), (80, 68)],
+    "top_sideline":      [(0, 0), (105, 0)],
+    "bottom_sideline":   [(0, 68), (105, 68)],
     
     # Halfway line
-    "halfway":          [(50, 0), (50, 68)],
+    "halfway":           [(52.5, 0), (52.5, 68)],
     
-    # 40m lines
-    "40m_left":         [(40, 0), (40, 68)],
-    "40m_right":        [(60, 0), (60, 68)],
+    # Penalty areas (16.5m from goal, 40.32m wide)
+    "left_box_top":      [(0, 13.84), (16.5, 13.84)],
+    "left_box_bottom":   [(0, 54.16), (16.5, 54.16)],
+    "left_box_right":    [(16.5, 13.84), (16.5, 54.16)],
+    
+    "right_box_top":     [(105, 13.84), (88.5, 13.84)],
+    "right_box_bottom":  [(105, 54.16), (88.5, 54.16)],
+    "right_box_left":    [(88.5, 13.84), (88.5, 54.16)],
 }
 # ─────────────────────────────────────────
 
@@ -76,15 +99,21 @@ def project_world_to_pixel(world_points: np.ndarray, H: np.ndarray) -> np.ndarra
         (N, 2) array of pixel coordinates
     """
     # Invert homography to get pixel → world, then invert again for world → pixel
-    H_inv = np.linalg.inv(H)
+    # H_inv = np.linalg.inv(H)
     
-    # Convert to homogeneous coordinates
+    # # Convert to homogeneous coordinates
+    # world_homo = np.concatenate([world_points, np.ones((len(world_points), 1))], axis=1)
+    
+    # # Project
+    # pixel_homo = (H_inv @ world_homo.T).T
+    # pixel_coords = pixel_homo[:, :2] / pixel_homo[:, 2:3]
+
+    #this is correct version for tcalib.
     world_homo = np.concatenate([world_points, np.ones((len(world_points), 1))], axis=1)
-    
-    # Project
-    pixel_homo = (H_inv @ world_homo.T).T
+
+    pixel_homo = (H @ world_homo.T).T
     pixel_coords = pixel_homo[:, :2] / pixel_homo[:, 2:3]
-    
+        
     return pixel_coords.astype(np.int32)
 
 

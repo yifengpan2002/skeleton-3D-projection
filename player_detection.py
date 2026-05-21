@@ -30,7 +30,7 @@ FRAMES_ROOT  = "data/frames"
 OUTPUT_ROOT  = "data/detections"
 MODEL_PATH   = "model\yolo11x.pt"
 FRAME_STEP   = 1
-CONF_THRESH  = 0.2
+CONF_THRESH  = 0.35
 TARGET_CLASS = "person"
 SAVE_FRAMES  = True
 IMG_SIZE     = 1280
@@ -48,6 +48,18 @@ FIELD_POLYGON = np.array([
     [-FIELD_MARGIN,                 FIELD_WIDTH + FIELD_MARGIN],
 ], dtype=np.float32)
 
+
+# Image-space field polygon.
+# These are pixel coordinates on the 1280x720 frame.
+# You MUST adjust these points after checking your first output frame.
+USE_IMAGE_FIELD_MASK = True
+
+FIELD_POLYGON_IMAGE = np.array([
+    [40, 250],      # top-left visible field
+    [1240, 230],    # top-right visible field
+    [1275, 715],    # bottom-right visible field
+    [10, 715],      # bottom-left visible field
+], dtype=np.int32)
 
 # ─────────────────────────────────────────
 #  LOAD HOMOGRAPHIES
@@ -98,6 +110,17 @@ def is_on_field(px: int, py: int, H: np.ndarray, polygon: np.ndarray) -> bool:
         return False
 
 
+def is_inside_image_field(px: int, py: int) -> bool:
+    """
+    Return True if image pixel (px, py) is inside the manually defined
+    field polygon in image coordinates.
+    """
+    result = cv2.pointPolygonTest(
+        FIELD_POLYGON_IMAGE,
+        (float(px), float(py)),
+        measureDist=False
+    )
+    return result >= 0
 # ─────────────────────────────────────────
 #  DETECTION
 # ─────────────────────────────────────────
@@ -171,6 +194,29 @@ def detect_players(
             else:
                 on_field = is_on_field(feet_x, feet_y, H, FIELD_POLYGON)
 
+            # if not on_field:
+            #     continue
+            # Basic box-size filter: remove tiny crowd/background detections
+            box_w = x2 - x1
+            box_h = y2 - y1
+
+            if box_w < 8 or box_h < 25:
+                continue
+
+            # Bottom-centre = player's feet
+            feet_x = (x1 + x2) // 2
+            feet_y = y2
+
+            # Use image-space field mask instead of TVCalib homography
+            if USE_IMAGE_FIELD_MASK:
+                on_field = is_inside_image_field(feet_x, feet_y)
+            else:
+                if H is None:
+                    on_field = True
+                    no_homography += 1
+                else:
+                    on_field = is_on_field(feet_x, feet_y, H, FIELD_POLYGON)
+
             if not on_field:
                 continue
 
@@ -189,6 +235,14 @@ def detect_players(
         # Draw on-field bounding boxes and save annotated frame
         if save_frames:
             frame_img = cv2.imread(frame_path)
+            if USE_IMAGE_FIELD_MASK:
+                cv2.polylines(
+                    frame_img,
+                    [FIELD_POLYGON_IMAGE],
+                    isClosed=True,
+                    color=(255, 0, 0),
+                    thickness=2
+                )
             for rec in records_this_frame:
                 cv2.rectangle(
                     frame_img,
@@ -305,7 +359,12 @@ if __name__ == "__main__":
 
     # Load homographies
     homography_map = load_homographies_npz(npz_path)
-
+    # Load homographies only if using TVCalib filtering
+    if USE_IMAGE_FIELD_MASK:
+        homography_map = {}
+        print("[NPZ]    Skipping homography loading because USE_IMAGE_FIELD_MASK=True\n")
+    else:
+        homography_map = load_homographies_npz(npz_path)
     # Load existing frames
     frame_paths = sorted(str(p) for p in Path(frames_dir).glob("frame_*.jpg"))
     if not frame_paths:

@@ -75,7 +75,7 @@ def extract_frames(
 #  STANDALONE ENTRY POINT
 # ─────────────────────────────────────────
 if __name__ == "__main__":
-    VIDEO_PATH  = "data/clips-NRL/Adam_Doueihi-Tigers_v_Eels_NRL_R6_2023.mkv"
+    VIDEO_PATH  = "data/fifa/ARG_CRO_220001 (1).mp4"
     FRAMES_ROOT = "data/frames"
     FRAME_STEP  = 1
 

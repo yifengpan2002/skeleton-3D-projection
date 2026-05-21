@@ -3,3 +3,4 @@ python310
 model
 tvcalib
 __pycache__/
+outputs/

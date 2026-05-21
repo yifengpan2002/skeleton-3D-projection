@@ -33,7 +33,7 @@ from tvcalib.inference import InferenceDatasetCalibration, InferenceDatasetSegme
 # ─────────────────────────────────────────
 #  CONFIGURATION
 # ─────────────────────────────────────────
-VIDEO_NAME      = "Adam_Doueihi-Tigers_v_Eels_NRL_R6_2023"
+VIDEO_NAME = "ARG_CRO_220001 (1)"
 FRAMES_ROOT     = "data/frames"
 OUTPUT_ROOT     = "data/detections"
 SEG_CHECKPOINT  = "tvcalib/data/segment_localization/train_59.pt"

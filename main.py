@@ -16,7 +16,7 @@ import sys
 # ─────────────────────────────────────────
 #  CONFIGURATION
 # ─────────────────────────────────────────
-VIDEO_PATH  = "data/clips-NRL/Adam_Doueihi-Tigers_v_Eels_NRL_R6_2023.mkv"
+VIDEO_PATH  = r"data\fifa\ARG_CRO_220001 (1).mp4"
 FRAMES_ROOT = "data/frames"
 OUTPUT_ROOT = "data/detections"
 # ─────────────────────────────────────────
