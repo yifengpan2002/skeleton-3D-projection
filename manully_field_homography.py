@@ -149,53 +149,176 @@ def line_intersection(p1, p2, p3, p4):
     return (px, py)
 
 
-def find_all_intersections(lines, img_shape, green_mask=None, angle_min=15):
+def merge_collinear_lines(lines, angle_thresh=8, dist_thresh=15):
     """
-    Find intersections between all detected line pairs.
-    Filters:
-    - Only keep intersections within image bounds
-    - Only keep intersections where lines cross at >= angle_min degrees
-    - Only keep intersections on the field (green mask)
+    Merge Hough segments that lie on the same physical line.
+    
+    Two segments are merged if:
+    - Their angles are within `angle_thresh` degrees of each other
+    - The perpendicular distance between them is below `dist_thresh` pixels
+    
+    Result: each physical field line becomes ONE merged line, eliminating
+    "phantom intersections" between overlapping Hough detections.
+    
+    Returns: list of merged lines in same format as Hough output [[(x1,y1,x2,y2)], ...]
+    """
+    if lines is None or len(lines) == 0:
+        return []
+    
+    # Parse all segments
+    segments = []
+    for line in lines:
+        x1, y1, x2, y2 = line[0]
+        angle = np.degrees(np.arctan2(y2 - y1, x2 - x1)) % 180
+        length = np.sqrt((x2 - x1)**2 + (y2 - y1)**2)
+        segments.append({
+            'pts': (x1, y1, x2, y2),
+            'angle': angle,
+            'length': length,
+            'merged': False,
+        })
+    
+    merged_lines = []
+    
+    for i, seg_i in enumerate(segments):
+        if seg_i['merged']:
+            continue
+        
+        group_pts = [(seg_i['pts'][0], seg_i['pts'][1]),
+                     (seg_i['pts'][2], seg_i['pts'][3])]
+        seg_i['merged'] = True
+        
+        for j, seg_j in enumerate(segments):
+            if seg_j['merged']:
+                continue
+            
+            # Check angle similarity
+            angle_diff = abs(seg_i['angle'] - seg_j['angle'])
+            if angle_diff > 90:
+                angle_diff = 180 - angle_diff
+            if angle_diff > angle_thresh:
+                continue
+            
+            # Check perpendicular distance from seg_j to line of seg_i
+            x1, y1, x2, y2 = seg_i['pts']
+            dx, dy = x2 - x1, y2 - y1
+            line_len = max(np.sqrt(dx**2 + dy**2), 1)
+            
+            # Distance from midpoint of seg_j to seg_i's line
+            mid_x = (seg_j['pts'][0] + seg_j['pts'][2]) / 2
+            mid_y = (seg_j['pts'][1] + seg_j['pts'][3]) / 2
+            perp_dist = abs((mid_x - x1) * dy - (mid_y - y1) * dx) / line_len
+            
+            if perp_dist < dist_thresh:
+                group_pts.append((seg_j['pts'][0], seg_j['pts'][1]))
+                group_pts.append((seg_j['pts'][2], seg_j['pts'][3]))
+                seg_j['merged'] = True
+        
+        # Fit one line through all endpoints in the group using PCA
+        if len(group_pts) >= 2:
+            pts_arr = np.array(group_pts, dtype=np.float64)
+            mean = pts_arr.mean(axis=0)
+            centered = pts_arr - mean
+            _, _, Vt = np.linalg.svd(centered)
+            direction = Vt[0]
+            
+            # Project all points onto the line direction and take extremes
+            projections = centered @ direction
+            p1 = mean + projections.min() * direction
+            p2 = mean + projections.max() * direction
+            
+            merged_lines.append([[int(p1[0]), int(p1[1]), int(p2[0]), int(p2[1])]])
+    
+    return np.array(merged_lines) if merged_lines else None
+
+
+def point_to_segment_distance(px, py, x1, y1, x2, y2):
+    """Distance from point (px, py) to the segment defined by (x1,y1)-(x2,y2)."""
+    dx, dy = x2 - x1, y2 - y1
+    seg_len_sq = dx * dx + dy * dy
+    if seg_len_sq < 1e-6:
+        return np.sqrt((px - x1)**2 + (py - y1)**2)
+    
+    # Project point onto segment, clamp to [0, 1]
+    t = max(0, min(1, ((px - x1) * dx + (py - y1) * dy) / seg_len_sq))
+    closest_x = x1 + t * dx
+    closest_y = y1 + t * dy
+    return np.sqrt((px - closest_x)**2 + (py - closest_y)**2)
+
+
+def find_all_intersections(lines, img_shape, green_mask=None,
+                           angle_min=45, max_dist_to_segment=50,
+                           merge_first=True):
+    """
+    Find REAL intersections between detected line pairs.
+    
+    Three fixes applied:
+    1. Merge collinear lines first (eliminates phantom intersections)
+    2. Stricter angle threshold (only true perpendicular crossings)
+    3. Verify intersection is close to BOTH line segments (not extrapolated)
+    
+    Parameters:
+        lines: Hough lines output
+        img_shape: image shape (h, w, ...)
+        green_mask: optional binary mask of the field
+        angle_min: minimum angle between two lines (default 60°, was 15°)
+        max_dist_to_segment: max pixel distance from intersection to each segment
+        merge_first: whether to merge collinear segments first
     """
     if lines is None:
         return []
-
+    
+    # FIX 1: Merge collinear segments first
+    if merge_first:
+        lines = merge_collinear_lines(lines, angle_thresh=8, dist_thresh=15)
+        if lines is None or len(lines) == 0:
+            return []
+        print(f"    After merging: {len(lines)} unique lines")
+    
     h, w = img_shape[:2]
-    margin = 50  # Allow slight off-screen intersections
+    margin = 50
     intersections = []
-
+    
     for i in range(len(lines)):
         for j in range(i + 1, len(lines)):
             x1, y1, x2, y2 = lines[i][0]
             x3, y3, x4, y4 = lines[j][0]
-
-            # Check angle between lines (skip near-parallel)
+            
+            # FIX 3: Stricter angle threshold (default 60° instead of 15°)
             angle1 = np.degrees(np.arctan2(y2 - y1, x2 - x1)) % 180
             angle2 = np.degrees(np.arctan2(y4 - y3, x4 - x3)) % 180
             angle_diff = abs(angle1 - angle2)
             if angle_diff > 90:
                 angle_diff = 180 - angle_diff
             if angle_diff < angle_min:
-                continue  # Too close to parallel
-
+                continue
+            
             pt = line_intersection((x1, y1), (x2, y2), (x3, y3), (x4, y4))
             if pt is None:
                 continue
-
+            
             px, py = pt
-
+            
             # Check bounds
             if px < -margin or px > w + margin or py < -margin or py > h + margin:
                 continue
-
+            
+            # FIX 2: Intersection must be close to BOTH segments
+            # (real crossings happen at/near the segments, not extrapolated far away)
+            dist_to_seg1 = point_to_segment_distance(px, py, x1, y1, x2, y2)
+            dist_to_seg2 = point_to_segment_distance(px, py, x3, y3, x4, y4)
+            
+            if dist_to_seg1 > max_dist_to_segment or dist_to_seg2 > max_dist_to_segment:
+                continue
+            
             # Check if on green field
             if green_mask is not None:
                 ix, iy = int(np.clip(px, 0, w - 1)), int(np.clip(py, 0, h - 1))
                 if green_mask[iy, ix] == 0:
                     continue
-
+            
             intersections.append((int(px), int(py)))
-
+    
     # Remove duplicate points (within 20px of each other)
     filtered = []
     for pt in intersections:
@@ -207,7 +330,7 @@ def find_all_intersections(lines, img_shape, green_mask=None, angle_min=15):
                 break
         if not is_dup:
             filtered.append(pt)
-
+    
     return filtered
 
 

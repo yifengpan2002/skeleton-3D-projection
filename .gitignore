@@ -1,4 +1,7 @@
-data
+data/clips-NRL
+data/fifa
+data/detections
+data/frames
 python310
 model
 tvcalib

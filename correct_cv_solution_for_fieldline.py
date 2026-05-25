@@ -211,10 +211,10 @@ for index, img_path in enumerate(image_files):
             cv2.drawContours(contour_vis, [cnt], -1, (0, 0, 255), 2)
 
         # 15. Save outputs
-        # cv2.imshow(str(img_output_dir / "04_white_lines_threshold.jpg"), white_lines)
-        # cv2.imshow(str(img_output_dir / "05_white_lines_cleaned.jpg"), white_lines_cleaned)
-        # cv2.imshow(str(img_output_dir / "06_edges.jpg"), edges)
-        # cv2.imshow(str(img_output_dir / "07_contours_on_original.jpg"), contour_vis)
+        cv2.imshow(str(img_output_dir / "04_white_lines_threshold.jpg"), white_lines)
+        cv2.imshow(str(img_output_dir / "05_white_lines_cleaned.jpg"), white_lines_cleaned)
+        cv2.imshow(str(img_output_dir / "06_edges.jpg"), edges)
+        cv2.imshow(str(img_output_dir / "07_contours_on_original.jpg"), contour_vis)
 
         # function 3: Geometric Line Extraction using Hough Transform
 

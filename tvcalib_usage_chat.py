@@ -47,10 +47,10 @@ OUTPUT_ROOT = ROOT / "data" / "detections"
 
 SEG_CHECKPOINT = ROOT / "tvcalib" / "data" / "segment_localization" / "train_59.pt"
 
-IMAGE_WIDTH = 1280
-IMAGE_HEIGHT = 720
+IMAGE_WIDTH = 455
+IMAGE_HEIGHT = 256
 
-NUM_FRAMES = 2         # test first 10 frames first
+NUM_FRAMES = 6         # test first 10 frames first
 BATCH_SIZE_SEG = 1
 BATCH_SIZE_CALIB = 1     # keep small on CPU
 OPTIM_STEPS = 2000

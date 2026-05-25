@@ -177,20 +177,20 @@ for index, img_path in enumerate(image_files):
         # ============================================================
         # 7. Save debug outputs
         # ============================================================
-        cv2.imwrite(str(img_output_dir / "01_original.jpg"), frame)
-        cv2.imwrite(str(img_output_dir / "02_green_mask.jpg"), green_mask)
-        cv2.imwrite(str(img_output_dir / "03_green_field.jpg"), green_field)
+        # cv2.imwrite(str(img_output_dir / "01_original.jpg"), frame)
+        # cv2.imwrite(str(img_output_dir / "02_green_mask.jpg"), green_mask)
+        # cv2.imwrite(str(img_output_dir / "03_green_field.jpg"), green_field)
 
-        cv2.imwrite(str(img_output_dir / "04_white_lines_threshold.jpg"), white_lines)
-        cv2.imwrite(str(img_output_dir / "05_white_lines_cleaned.jpg"), white_lines_cleaned)
+        # cv2.imwrite(str(img_output_dir / "04_white_lines_threshold.jpg"), white_lines)
+        # cv2.imwrite(str(img_output_dir / "05_white_lines_cleaned.jpg"), white_lines_cleaned)
 
-        cv2.imwrite(str(img_output_dir / "06_edges_green_field.jpg"), edges_green_field)
-        cv2.imwrite(str(img_output_dir / "07_edges_green_mask.jpg"), edges_green_mask)
-        cv2.imwrite(str(img_output_dir / "08_edges_green_mask_dilated.jpg"), edges_green_mask_dilated)
-        cv2.imwrite(str(img_output_dir / "09_final_edges_removed_mask_edges.jpg"), edges)
+        # cv2.imwrite(str(img_output_dir / "06_edges_green_field.jpg"), edges_green_field)
+        # cv2.imwrite(str(img_output_dir / "07_edges_green_mask.jpg"), edges_green_mask)
+        # cv2.imwrite(str(img_output_dir / "08_edges_green_mask_dilated.jpg"), edges_green_mask_dilated)
+        # cv2.imwrite(str(img_output_dir / "09_final_edges_removed_mask_edges.jpg"), edges)
 
-        cv2.imwrite(str(img_output_dir / "10_contours_on_original.jpg"), contour_vis)
-        cv2.imwrite(str(img_output_dir / "11_hough_lines_on_original.jpg"), line_vis)
+        # cv2.imwrite(str(img_output_dir / "10_contours_on_original.jpg"), contour_vis)
+        # cv2.imwrite(str(img_output_dir / "11_hough_lines_on_original.jpg"), line_vis)
 
         # ============================================================
         # 8. Optional display
