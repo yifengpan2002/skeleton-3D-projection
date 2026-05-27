@@ -247,7 +247,7 @@ def point_to_segment_distance(px, py, x1, y1, x2, y2):
 
 
 def find_all_intersections(lines, img_shape, green_mask=None,
-                           angle_min=45, max_dist_to_segment=50,
+                           angle_min=30, max_dist_to_segment=80,
                            merge_first=True):
     """
     Find REAL intersections between detected line pairs.

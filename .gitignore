@@ -2,6 +2,7 @@ data/clips-NRL
 data/fifa
 data/detections
 data/frames
+data/official_tvcalib__football_frame/
 python310
 model
 tvcalib

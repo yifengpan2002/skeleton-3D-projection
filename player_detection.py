@@ -1,14 +1,13 @@
 """
 player_detection.py
 --------------------
-Runs YOLOv11 player detection on extracted frames, filters detections
-to on-field players only using homography matrices from tvcalib_preprocess.py,
-saves annotated frames, a CSV, and an output video.
+Runs YOLOv11 player detection on extracted frames, saves annotated
+frames, a CSV, and an output video.
 
 Output:
     data/detections/<video_name>/
         ├── frame_XXXXXX.jpg          ← annotated frames
-        ├── detections.csv            ← all on-field detection records
+        ├── detections.csv            ← all detection records
         └── <video_name>_annotated.mp4
 
 Can be run standalone or imported by main.py.
@@ -17,7 +16,6 @@ Can be run standalone or imported by main.py.
 import cv2
 import os
 import csv
-import numpy as np
 from pathlib import Path
 from ultralytics import YOLO
 
@@ -26,101 +24,17 @@ from ultralytics import YOLO
 #  CONFIGURATION
 # ─────────────────────────────────────────
 VIDEO_PATH   = "data/clips-NRL/Adam_Doueihi-Tigers_v_Eels_NRL_R6_2023.mkv"
-FRAMES_ROOT  = "data/frames"
-OUTPUT_ROOT  = "data/detections"
+FRAMES_DIR   = "data/annotated_rugby_player"
+OUTPUT_DIR   = "outputs/player_detect/annotated_player"
 MODEL_PATH   = "model\yolo11x.pt"
 FRAME_STEP   = 1
 CONF_THRESH  = 0.35
 TARGET_CLASS = "person"
 SAVE_FRAMES  = True
 IMG_SIZE     = 1280
-
-# NRL field dimensions in metres
-FIELD_LENGTH = 100.0
-FIELD_WIDTH  =  68.0
-FIELD_MARGIN =   2.0    # padding so sideline players aren't wrongly discarded
 # ─────────────────────────────────────────
 
-FIELD_POLYGON = np.array([
-    [-FIELD_MARGIN,                -FIELD_MARGIN],
-    [FIELD_LENGTH + FIELD_MARGIN,  -FIELD_MARGIN],
-    [FIELD_LENGTH + FIELD_MARGIN,   FIELD_WIDTH + FIELD_MARGIN],
-    [-FIELD_MARGIN,                 FIELD_WIDTH + FIELD_MARGIN],
-], dtype=np.float32)
 
-
-# Image-space field polygon.
-# These are pixel coordinates on the 1280x720 frame.
-# You MUST adjust these points after checking your first output frame.
-USE_IMAGE_FIELD_MASK = True
-
-FIELD_POLYGON_IMAGE = np.array([
-    [40, 250],      # top-left visible field
-    [1240, 230],    # top-right visible field
-    [1275, 715],    # bottom-right visible field
-    [10, 715],      # bottom-left visible field
-], dtype=np.int32)
-
-# ─────────────────────────────────────────
-#  LOAD HOMOGRAPHIES
-# ─────────────────────────────────────────
-
-def load_homographies_npz(npz_path: str) -> dict[str, np.ndarray]:
-    """
-    Load homography matrices saved by tvcalib_preprocess.py.
-    Returns { 'frame_000042': np.ndarray (3,3) or None, ... }
-    NaN-filled rows (failed calibration) are returned as None.
-    """
-    if not Path(npz_path).exists():
-        raise FileNotFoundError(
-            f"NPZ not found: '{npz_path}'\n"
-            "Run tvcalib_preprocess.py first."
-        )
-
-    data         = np.load(npz_path, allow_pickle=False)
-    frame_names  = data["frame_names"]
-    homographies = data["homographies"]
-
-    result = {}
-    for name, H in zip(frame_names, homographies):
-        result[str(name)] = None if np.any(np.isnan(H)) else H.astype(np.float32)
-
-    valid = sum(1 for v in result.values() if v is not None)
-    print(f"[NPZ]    Loaded {len(result)} homographies "
-          f"({valid} valid, {len(result) - valid} failed) from '{npz_path}'")
-    return result
-
-
-# ─────────────────────────────────────────
-#  FIELD FILTERING
-# ─────────────────────────────────────────
-
-def is_on_field(px: int, py: int, H: np.ndarray, polygon: np.ndarray) -> bool:
-    """
-    Return True if image pixel (px, py) maps inside the field polygon.
-    Uses the player's feet (bottom-centre of bounding box) for accuracy.
-    """
-    try:
-        pt        = np.array([[[px, py]]], dtype=np.float32)
-        projected = cv2.perspectiveTransform(pt, H)
-        fx, fy    = float(projected[0, 0, 0]), float(projected[0, 0, 1])
-        result    = cv2.pointPolygonTest(polygon, (fx, fy), measureDist=False)
-        return result >= 0
-    except Exception:
-        return False
-
-
-def is_inside_image_field(px: int, py: int) -> bool:
-    """
-    Return True if image pixel (px, py) is inside the manually defined
-    field polygon in image coordinates.
-    """
-    result = cv2.pointPolygonTest(
-        FIELD_POLYGON_IMAGE,
-        (float(px), float(py)),
-        measureDist=False
-    )
-    return result >= 0
 # ─────────────────────────────────────────
 #  DETECTION
 # ─────────────────────────────────────────
@@ -129,14 +43,13 @@ def detect_players(
     frame_paths: list[str],
     model_path: str,
     output_dir: str,
-    homography_map: dict[str, np.ndarray],
     conf: float = 0.25,
     target_class: str = "person",
     img_size: int = 1280,
     save_frames: bool = True,
 ) -> list[dict]:
     """
-    Run YOLOv11 on each frame and filter detections to on-field players only.
+    Run YOLOv11 on each frame and save detections.
     Returns a list of detection records.
     """
     Path(output_dir).mkdir(parents=True, exist_ok=True)
@@ -157,15 +70,12 @@ def detect_players(
     print(f"[YOLO]   Target class -> '{target_class}' (id={target_cls_id})")
     print(f"[YOLO]   Processing {len(frame_paths)} frames ...\n")
 
-    all_records   = []
-    total_raw     = 0
-    total_kept    = 0
-    no_homography = 0
+    all_records = []
+    total_raw   = 0
+    total_kept  = 0
 
     for i, frame_path in enumerate(frame_paths):
-        frame_stem = Path(frame_path).stem
         frame_name = Path(frame_path).name
-        H          = homography_map.get(frame_stem)
 
         results = model.predict(
             source  = frame_path,
@@ -184,40 +94,11 @@ def detect_players(
             confidence      = round(float(box.conf[0]), 4)
             total_raw      += 1
 
-            # Bottom-centre = player's feet
-            feet_x = (x1 + x2) // 2
-            feet_y = y2
-
-            if H is None:
-                on_field = True     # no homography — keep as fallback
-                no_homography += 1
-            else:
-                on_field = is_on_field(feet_x, feet_y, H, FIELD_POLYGON)
-
-            # if not on_field:
-            #     continue
             # Basic box-size filter: remove tiny crowd/background detections
             box_w = x2 - x1
             box_h = y2 - y1
 
             if box_w < 8 or box_h < 25:
-                continue
-
-            # Bottom-centre = player's feet
-            feet_x = (x1 + x2) // 2
-            feet_y = y2
-
-            # Use image-space field mask instead of TVCalib homography
-            if USE_IMAGE_FIELD_MASK:
-                on_field = is_inside_image_field(feet_x, feet_y)
-            else:
-                if H is None:
-                    on_field = True
-                    no_homography += 1
-                else:
-                    on_field = is_on_field(feet_x, feet_y, H, FIELD_POLYGON)
-
-            if not on_field:
                 continue
 
             total_kept += 1
@@ -232,17 +113,9 @@ def detect_players(
 
         all_records.extend(records_this_frame)
 
-        # Draw on-field bounding boxes and save annotated frame
+        # Draw bounding boxes and save annotated frame
         if save_frames:
             frame_img = cv2.imread(frame_path)
-            if USE_IMAGE_FIELD_MASK:
-                cv2.polylines(
-                    frame_img,
-                    [FIELD_POLYGON_IMAGE],
-                    isClosed=True,
-                    color=(255, 0, 0),
-                    thickness=2
-                )
             for rec in records_this_frame:
                 cv2.rectangle(
                     frame_img,
@@ -261,13 +134,11 @@ def detect_players(
 
         if (i + 1) % 50 == 0 or (i + 1) == len(frame_paths):
             print(f"  [{i + 1}/{len(frame_paths)}] {frame_name} "
-                  f"-> {len(records_this_frame)} on-field player(s)")
+                  f"-> {len(records_this_frame)} player(s)")
 
-    print(f"\n[Filter] Raw detections  : {total_raw}")
-    print(f"[Filter] Kept (on-field) : {total_kept}")
-    print(f"[Filter] Discarded       : {total_raw - total_kept}")
-    if no_homography > 0:
-        print(f"[Filter] No-homography frames (kept all): {no_homography}")
+    print(f"\n[Filter] Raw detections : {total_raw}")
+    print(f"[Filter] Kept           : {total_kept}")
+    print(f"[Filter] Discarded      : {total_raw - total_kept}")
 
     return all_records
 
@@ -335,7 +206,7 @@ def print_summary(records: list[dict], frame_paths: list[str]) -> None:
     print("-----------------------------------------")
     print(f"  Total frames processed : {len(frame_paths)}")
     print(f"  Frames with detections : {frames}")
-    print(f"  Total on-field players : {total}")
+    print(f"  Total players          : {total}")
     print(f"  Avg players / frame    : {avg:.2f}")
     print("-----------------------------------------\n")
 
@@ -344,46 +215,31 @@ def print_summary(records: list[dict], frame_paths: list[str]) -> None:
 #  STANDALONE ENTRY POINT
 # ─────────────────────────────────────────
 if __name__ == "__main__":
-    from pathlib import Path
-
     video_name   = Path(VIDEO_PATH).stem
-    frames_dir   = os.path.join(FRAMES_ROOT, video_name)
-    output_dir   = os.path.join(OUTPUT_ROOT, video_name)
+    output_dir   = OUTPUT_DIR
     output_video = os.path.join(output_dir, f"{video_name}_annotated.mp4")
-    npz_path     = os.path.join(output_dir, "homographies.npz")
 
     print(f"[Setup]  Video      : {video_name}")
-    print(f"[Setup]  Frames dir : {frames_dir}")
-    print(f"[Setup]  Output dir : {output_dir}")
-    print(f"[Setup]  NPZ file   : {npz_path}\n")
+    print(f"[Setup]  Frames dir : {FRAMES_DIR}")
+    print(f"[Setup]  Output dir : {output_dir}\n")
 
-    # Load homographies
-    homography_map = load_homographies_npz(npz_path)
-    # Load homographies only if using TVCalib filtering
-    if USE_IMAGE_FIELD_MASK:
-        homography_map = {}
-        print("[NPZ]    Skipping homography loading because USE_IMAGE_FIELD_MASK=True\n")
-    else:
-        homography_map = load_homographies_npz(npz_path)
     # Load existing frames
-    frame_paths = sorted(str(p) for p in Path(frames_dir).glob("frame_*.jpg"))
+    frame_paths = sorted(str(p) for p in Path(FRAMES_DIR).glob("frame_*.jpg"))
     if not frame_paths:
         raise FileNotFoundError(
-            f"No frames found in '{frames_dir}'. "
-            "Run extract_frames.py first."
+            f"No frames found in '{FRAMES_DIR}'."
         )
-    print(f"[Frames] Loaded {len(frame_paths)} frames from '{frames_dir}'\n")
+    print(f"[Frames] Loaded {len(frame_paths)} frames from '{FRAMES_DIR}'\n")
 
-    # Detect + filter
+    # Detect
     records = detect_players(
-        frame_paths    = frame_paths,
-        model_path     = MODEL_PATH,
-        output_dir     = output_dir,
-        homography_map = homography_map,
-        conf           = CONF_THRESH,
-        target_class   = TARGET_CLASS,
-        img_size       = IMG_SIZE,
-        save_frames    = SAVE_FRAMES,
+        frame_paths  = frame_paths,
+        model_path   = MODEL_PATH,
+        output_dir   = output_dir,
+        conf         = CONF_THRESH,
+        target_class = TARGET_CLASS,
+        img_size     = IMG_SIZE,
+        save_frames  = SAVE_FRAMES,
     )
 
     # Save results

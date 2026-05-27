@@ -260,6 +260,12 @@ for index, img_path in enumerate(image_files):
                 )
         else:
             print("No Hough lines detected")
+        
+        # text = f"Hough Lines: {line_count}"
+        # cv2.putText(line_vis, text, (20, 50),
+        #             cv2.FONT_HERSHEY_SIMPLEX, 1.2, (0, 0, 0), 5)   # 黑色描边
+        # cv2.putText(line_vis, text, (20, 50),
+        #             cv2.FONT_HERSHEY_SIMPLEX, 1.2, (0, 255, 255), 2)  # 黄色文字
 
         cv2.imshow(str(img_output_dir / "08_hough_lines_on_original.jpg"), line_vis)
 
