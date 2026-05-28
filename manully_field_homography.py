@@ -118,7 +118,7 @@ def detect_lines(frame):
     # Hough lines
     lines = cv2.HoughLinesP(
         edges, rho=1, theta=np.pi/180,
-        threshold=80, minLineLength=60, maxLineGap=25,
+        threshold=35, minLineLength=10, maxLineGap=10,
     )
 
     return lines, green_mask
@@ -247,7 +247,7 @@ def point_to_segment_distance(px, py, x1, y1, x2, y2):
 
 
 def find_all_intersections(lines, img_shape, green_mask=None,
-                           angle_min=30, max_dist_to_segment=80,
+                           angle_min=45, max_dist_to_segment=50,
                            merge_first=True):
     """
     Find REAL intersections between detected line pairs.

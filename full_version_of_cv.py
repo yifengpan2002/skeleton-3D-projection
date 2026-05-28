@@ -121,7 +121,7 @@ for index, img_path in enumerate(image_files):
 
         # Optional: clean final edge result slightly
         small_kernel = np.ones((2, 2), np.uint8)
-        edges = cv2.morphologyEx(edges, cv2.MORPH_OPEN, small_kernel)
+        edges = cv2.morphologyEx(edges, cv2.MORPH_CLOSE, small_kernel)
 
         # ============================================================
         # 5. Contour Detection
@@ -151,9 +151,9 @@ for index, img_path in enumerate(image_files):
             edges,
             rho=1,
             theta=np.pi / 180,
-            threshold=80,
-            minLineLength=60,
-            maxLineGap=25
+            threshold=35,
+            minLineLength=10,
+            maxLineGap=10
         )
 
         line_vis = frame.copy()
